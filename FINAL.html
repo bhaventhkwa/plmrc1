@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PLM 2026–27 Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #090e1a;
+    --bg2: #0d1525;
+    --card: #111c30;
+    --card2: #162038;
+    --border: #1e3356;
+    --accent: #00c6ff;
+    --accent2: #f59e0b;
+    --accent3: #10b981;
+    --accent4: #ef4444;
+    --text: #e2eaf6;
+    --muted: #6b82a8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: linear-gradient(rgba(0,198,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,198,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  header {
+    position: relative; z-index: 10;
+    background: linear-gradient(90deg, #090e1a 0%, #0d1a30 50%, #090e1a 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 70px;
+  }
+  .logo-area { display: flex; align-items: center; gap: 14px; }
+  .logo-icon {
+    width: 42px; height: 42px;
+    background: linear-gradient(135deg, var(--accent), #0066ff);
+    border-radius: 8px; display: grid; place-items: center;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.9rem;
+    letter-spacing: 1px; color: #fff; box-shadow: 0 0 20px rgba(0,198,255,0.4);
+  }
+  .logo-text { font-family: 'Rajdhani', sans-serif; font-size: 1.4rem; font-weight: 700; letter-spacing: 2px; }
+  .logo-sub { font-size: 0.68rem; color: var(--muted); letter-spacing: 3px; text-transform: uppercase; }
+  .header-right { display: flex; align-items: center; gap: 1rem; }
+  #lastUpdated { font-family: 'Share Tech Mono', monospace; font-size: 0.72rem; color: var(--muted); }
+  .refresh-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: linear-gradient(135deg, var(--accent), #0066ff);
+    border: none; border-radius: 6px; color: #fff;
+    font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 0.9rem;
+    letter-spacing: 1px; padding: 8px 18px; cursor: pointer;
+    transition: all 0.2s; box-shadow: 0 0 14px rgba(0,198,255,0.3);
+  }
+  .refresh-btn:hover { transform: translateY(-1px); box-shadow: 0 0 22px rgba(0,198,255,0.5); }
+  .refresh-btn.spinning svg { animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  main { position: relative; z-index: 1; padding: 1.5rem 2rem 3rem; max-width: 1600px; margin: 0 auto; }
+  .status-bar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; font-size: 0.78rem; font-family: 'Share Tech Mono', monospace; color: var(--muted); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent3); box-shadow: 0 0 8px var(--accent3); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+  #dataStatus { color: var(--accent); }
+  #loadingOverlay {
+    position: fixed; inset: 0; background: rgba(9,14,26,0.95);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; gap: 1.5rem;
+  }
+  .spinner-ring { width: 60px; height: 60px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  #loadingOverlay p { font-family: 'Share Tech Mono', monospace; color: var(--accent); font-size: 0.9rem; letter-spacing: 2px; animation: blink 1.2s infinite; }
+  @keyframes blink { 50%{opacity:0.3} }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+  .kpi-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1.2rem 1.4rem; position: relative; overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s; animation: fadeUp 0.5s ease both;
+  }
+  .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
+  .kpi-card::before { content:''; position: absolute; top:0;left:0;right:0;height:2px; }
+  .kpi-card.blue::before  { background: linear-gradient(90deg, var(--accent), transparent); }
+  .kpi-card.amber::before { background: linear-gradient(90deg, var(--accent2), transparent); }
+  .kpi-card.green::before { background: linear-gradient(90deg, var(--accent3), transparent); }
+  .kpi-card.red::before   { background: linear-gradient(90deg, var(--accent4), transparent); }
+  .kpi-label { font-size: 0.68rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; }
+  .kpi-value { font-family: 'Rajdhani', sans-serif; font-size: 1.9rem; font-weight: 700; line-height: 1; margin-bottom: 0.3rem; }
+  .kpi-card.blue  .kpi-value { color: var(--accent); }
+  .kpi-card.amber .kpi-value { color: var(--accent2); }
+  .kpi-card.green .kpi-value { color: var(--accent3); }
+  .kpi-card.red   .kpi-value { color: var(--accent4); }
+  .kpi-sub { font-size: 0.7rem; color: var(--muted); }
+  .kpi-icon { position: absolute; right: 1.2rem; top: 50%; transform: translateY(-50%); font-size: 2rem; opacity: 0.1; }
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+  @media(max-width:900px){ .charts-row{grid-template-columns:1fr;} }
+  .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1.2rem; animation: fadeUp 0.6s ease both; }
+  .chart-card-title { font-family: 'Rajdhani', sans-serif; font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; }
+  .chart-card-title span { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: inline-block; }
+  .progress-section { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1.4rem; margin-bottom: 1.5rem; animation: fadeUp 0.55s ease both; }
+  .progress-title { font-family: 'Rajdhani', sans-serif; font-size: 0.75rem; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 1.2rem; display: flex; align-items: center; gap: 8px; }
+  .progress-title span { width: 6px; height: 6px; border-radius: 50%; background: var(--accent2); display: inline-block; }
+  .progress-bar-wrap { background: var(--bg2); border-radius: 8px; height: 28px; position: relative; overflow: hidden; border: 1px solid var(--border); }
+  .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent3), var(--accent)); border-radius: 8px; transition: width 1s ease; position: relative; }
+  .progress-bar-fill::after { content:''; position:absolute; inset:0; background: linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent); animation: shimmer 2s infinite; }
+  @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+  .progress-label { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-family: 'Share Tech Mono', monospace; font-size: 0.78rem; color: var(--text); }
+  .progress-meta { display: flex; justify-content: space-between; margin-top: 0.6rem; font-size: 0.7rem; color: var(--muted); font-family: 'Share Tech Mono', monospace; }
+  .month-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.6rem; margin-bottom: 1.5rem; }
+  @media(max-width:700px){ .month-grid{grid-template-columns:repeat(3,1fr);} }
+  .month-cell { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.8rem; text-align: center; animation: fadeUp 0.5s ease both; }
+  .month-name { font-size: 0.62rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; }
+  .month-amount { font-family: 'Rajdhani', sans-serif; font-size: 1rem; font-weight: 700; color: var(--text); }
+  .month-cell.has-data .month-amount { color: var(--accent2); }
+  .month-cell.has-data { border-color: rgba(245,158,11,0.3); }
+  .section-label { font-family:'Rajdhani',sans-serif;font-size:0.75rem;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:0.7rem;display:flex;align-items:center;gap:8px; }
+  .section-label span { width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block; }
+  .table-section { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; animation: fadeUp 0.7s ease both; }
+  .table-header { padding: 1rem 1.4rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .table-title { font-family: 'Rajdhani', sans-serif; font-size: 0.75rem; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+  .table-title span { width:6px;height:6px;border-radius:50%;background:var(--accent3);display:inline-block; }
+  .table-count { font-family: 'Share Tech Mono', monospace; font-size: 0.72rem; color: var(--muted); }
+  .table-wrap { overflow-x: auto; max-height: 400px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  thead { position: sticky; top: 0; background: var(--card2); z-index: 2; }
+  th { padding: 0.7rem 1rem; text-align: left; font-family: 'Rajdhani', sans-serif; font-size: 0.68rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 0.65rem 1rem; border-bottom: 1px solid rgba(30,51,86,0.4); color: var(--text); white-space: nowrap; }
+  tr:hover td { background: rgba(0,198,255,0.04); }
+  .td-amount { font-family: 'Share Tech Mono', monospace; color: var(--accent3); }
+  .td-date { font-family: 'Share Tech Mono', monospace; color: var(--muted); }
+  .error-msg { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 1rem 1.4rem; color: var(--accent4); font-size: 0.82rem; margin-bottom: 1rem; display: none; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+</style>
+</head>
+<body>
+
+<div id="loadingOverlay">
+  <div class="spinner-ring"></div>
+  <p>FETCHING LIVE DATA...</p>
+</div>
+
+<header>
+  <div class="logo-area">
+    <div class="logo-icon">PLM</div>
+    <div>
+      <div class="logo-text">PLM DASHBOARD</div>
+      <div class="logo-sub">Pipeline Leak Management · 2026–27</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div id="lastUpdated">—</div>
+    <button class="refresh-btn" id="refreshBtn" onclick="loadData()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      REFRESH
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="status-bar">
+    <div class="status-dot"></div>
+    <span id="dataStatus">CONNECTING...</span>
+    <span>|</span>
+    <span>CONTRACTOR: <span id="contractorName" style="color:var(--accent2)">—</span></span>
+  </div>
+
+  <div id="errorMsg" class="error-msg"></div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card blue">
+      <div class="kpi-label">Total Contract Value</div>
+      <div class="kpi-value" id="kpiContract">₹ —</div>
+      <div class="kpi-sub">Entire Period</div>
+      <div class="kpi-icon">📋</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Total Work Done</div>
+      <div class="kpi-value" id="kpiDone">₹ —</div>
+      <div class="kpi-sub">Amount Completed</div>
+      <div class="kpi-icon">✅</div>
+    </div>
+    <div class="kpi-card amber">
+      <div class="kpi-label">Days Remaining</div>
+      <div class="kpi-value" id="kpiDays">—</div>
+      <div class="kpi-sub">Contract Countdown</div>
+      <div class="kpi-icon">⏳</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Last Work Entry</div>
+      <div class="kpi-value" id="kpiLastDate" style="font-size:1.3rem">—</div>
+      <div class="kpi-sub">Most Recent Activity</div>
+      <div class="kpi-icon">📅</div>
+    </div>
+  </div>
+
+  <div class="progress-section">
+    <div class="progress-title"><span></span>CONTRACT UTILISATION</div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+      <div class="progress-label" id="progressLabel">0%</div>
+    </div>
+    <div class="progress-meta">
+      <span id="progressMeta1">₹ 0 Used</span>
+      <span id="progressMeta2">of ₹ 0 Total</span>
+    </div>
+  </div>
+
+  <div class="section-label"><span></span>MONTH-WISE BREAKDOWN</div>
+  <div class="month-grid" id="monthGrid"></div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-card-title"><span></span>MONTHLY AMOUNT (₹)</div>
+      <canvas id="barChart" height="200"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-title"><span></span>WORK ITEM DISTRIBUTION</div>
+      <canvas id="pieChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <div class="table-section">
+    <div class="table-header">
+      <div class="table-title"><span></span>WORK ACTIVITY LOG</div>
+      <div class="table-count" id="tableCount">0 records</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th><th>IR No</th><th>Complaint No</th>
+            <th>Item No</th><th>Description</th>
+            <th>Qty</th><th>Rate (₹)</th><th>Amount (₹)</th>
+          </tr>
+        </thead>
+        <tbody id="workTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR6gLaWYEPVxoCq1kQ90KQxIhFYlQk3wDn_C61QFIJawv4oZ79RGOYG0Sr0HUPQIX5cIEGyni4v1NHx/pub?output=csv";
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+let barChart = null, pieChart = null;
+
+// Fallback static data (updated from the latest dashboard CSV)
+const STATIC = {
+  contractValue: 2136187.47,
+  workDone: 224597.17,
+  daysRemaining: 145,
+  lastDate: '17-Apr-2025',
+  contractorName: 'REMESH KUMAR',
+  monthAmounts: [2212.78, 0, 0, 222384.39, 0, 0, 0, 0, 0, 0, 0, 0],
+  workRows: []
+};
+
+function cleanNum(val) {
+  if (!val) return 0;
+  // Remove ₹ and commas
+  const s = val.toString().replace(/[₹,]/g, '').trim();
+  return parseFloat(s) || 0;
+}
+
+function fmtINR(n) {
+  const num = parseFloat(n);
+  if (isNaN(num)) return '—';
+  return '₹ ' + num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function excelToDate(serial) {
+  if (!serial || isNaN(serial)) return null;
+  return new Date((parseFloat(serial) - 25569) * 86400000);
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  if (typeof d === 'string') return d;
+  return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+function renderDashboard(data) {
+  const cv = data.contractValue;
+  const wd = data.workDone;
+
+  // KPIs
+  document.getElementById('kpiContract').textContent = fmtINR(cv);
+  document.getElementById('kpiDone').textContent     = fmtINR(wd);
+  document.getElementById('kpiDays').textContent     = data.daysRemaining || '—';
+  document.getElementById('kpiLastDate').textContent = data.lastDate || '—';
+  document.getElementById('contractorName').textContent = data.contractorName || '—';
+
+  // Progress
+  const pct = cv > 0 ? Math.min(100, (wd / cv * 100)).toFixed(2) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = pct + '%';
+  document.getElementById('progressMeta1').textContent = fmtINR(wd) + ' Used';
+  document.getElementById('progressMeta2').textContent = 'of ' + fmtINR(cv) + ' Total';
+
+  // Months
+  const mg = document.getElementById('monthGrid');
+  mg.innerHTML = '';
+  (data.monthAmounts || []).forEach((amt, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'month-cell' + (amt > 0 ? ' has-data' : '');
+    cell.innerHTML = `<div class="month-name">${MONTHS[i].substring(0,3)}</div>
+      <div class="month-amount">${amt > 0 ? '₹'+amt.toLocaleString('en-IN',{maximumFractionDigits:0}) : '—'}</div>`;
+    mg.appendChild(cell);
+  });
+
+  // Bar Chart
+  if (barChart) barChart.destroy();
+  barChart = new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels: MONTHS.map(m => m.substring(0,3)),
+      datasets: [{
+        label: 'Amount (₹)',
+        data: data.monthAmounts || [],
+        backgroundColor: (data.monthAmounts||[]).map(v => v > 0 ? 'rgba(0,198,255,0.7)' : 'rgba(30,51,86,0.4)'),
+        borderColor: (data.monthAmounts||[]).map(v => v > 0 ? '#00c6ff' : '#1e3356'),
+        borderWidth: 1, borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#6b82a8', font: { family: 'Share Tech Mono', size: 10 } }, grid: { color: 'rgba(30,51,86,0.4)' } },
+        y: { ticks: { color: '#6b82a8', font: { family: 'Share Tech Mono', size: 10 }, callback: v => '₹'+v.toLocaleString('en-IN') }, grid: { color: 'rgba(30,51,86,0.4)' } }
+      }
+    }
+  });
+
+  // Pie Chart
+  if (pieChart) pieChart.destroy();
+  const cats = {};
+  (data.workRows || []).forEach(r => {
+    const g = 'Group ' + ((r.itNo || 'X').split('.')[0]);
+    cats[g] = (cats[g] || 0) + cleanNum(r.amount);
+  });
+  const pieColors = ['#00c6ff','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#f97316','#14b8a6'];
+  const pieLabels = Object.keys(cats);
+  const pieVals   = Object.values(cats);
+  pieChart = new Chart(document.getElementById('pieChart'), {
+    type: 'doughnut',
+    data: {
+      labels: pieLabels.length ? pieLabels : ['No Data'],
+      datasets: [{ data: pieVals.length ? pieVals : [1], backgroundColor: pieColors.slice(0, Math.max(pieLabels.length,1)), borderColor: '#111c30', borderWidth: 3 }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#6b82a8', font: { family: 'Share Tech Mono', size: 10 }, boxWidth: 12 } } }
+    }
+  });
+
+  // Table
+  const tbody = document.getElementById('workTableBody');
+  tbody.innerHTML = '';
+  const rows = data.workRows || [];
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem;font-family:'Share Tech Mono',monospace;font-size:0.78rem;">NO WORK ENTRIES FOUND — CHECK GOOGLE SHEETS WORK TAB</td></tr>`;
+  } else {
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="td-date">${r.date}</td>
+        <td>${r.irNo||'—'}</td>
+        <td>${r.compNo||'—'}</td>
+        <td style="color:var(--accent);font-family:'Share Tech Mono',monospace">${r.itNo||'—'}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${r.desc}">${r.desc}</td>
+        <td>${r.numbers||'—'}</td>
+        <td class="td-amount">${r.rate ? '₹'+cleanNum(r.rate).toLocaleString('en-IN') : '—'}</td>
+        <td class="td-amount" style="color:var(--accent2)">${r.amount ? '₹'+cleanNum(r.amount).toLocaleString('en-IN',{minimumFractionDigits:2}) : '—'}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+  document.getElementById('tableCount').textContent = rows.length + ' records';
+
+  // Status
+  const now = new Date();
+  document.getElementById('lastUpdated').textContent = 'Updated: ' + now.toLocaleTimeString('en-IN');
+  document.getElementById('loadingOverlay').style.display = 'none';
+  document.getElementById('refreshBtn').classList.remove('spinning');
+}
+
+function parseCSV(rows) {
+  const result = {
+    contractValue: 0, workDone: 0, daysRemaining: 0,
+    lastDate: '—', contractorName: '—',
+    monthAmounts: new Array(12).fill(0),
+    workRows: []
+  };
+
+  let workMode = false;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const r0 = (row[0]||'').toString().trim().toUpperCase();
+    const r3 = (row[3]||'').toString().trim().toUpperCase();
+
+    // Detect work table header (usually in a separate "Work" sheet or section)
+    if (r0 === 'DATE' && (row[6]||'').toString().toUpperCase().includes('DESCRIPTION')) {
+      workMode = true; continue;
+    }
+
+    if (workMode) {
+      const dateVal = row[0];
+      const desc = (row[6]||'').toString().trim();
+      if (dateVal && !isNaN(parseFloat(dateVal)) && desc && desc !== '-' && desc !== '') {
+        const d = excelToDate(dateVal);
+        result.workRows.push({
+          date: fmtDate(d), irNo: row[2], compNo: row[3], itNo: row[4],
+          numbers: row[5], desc, rate: row[7], amount: row[8]
+        });
+      }
+      continue;
+    }
+
+    // Header checks
+    if (r0.includes('CONTRACTOR NAME')) {
+      const nr = rows[i+1]||[];
+      result.contractorName = (nr[0]||'').toString().trim() || result.contractorName;
+    }
+    if (r0.includes('TOTAL CONTRACT AMOUNT')) {
+      const nr = rows[i+1]||[];
+      if (nr[0]) result.contractValue = cleanNum(nr[0]);
+      if (nr[3]) result.workDone = cleanNum(nr[3]);
+    }
+    if (r0.includes('DAYS REMAINING') || (row[4]||'').toString().toUpperCase().includes('DAYS REMAINING')) {
+      const nr = rows[i+1]||[];
+      const dr = parseInt(nr[4]) || parseInt(nr[2]);
+      if (dr) result.daysRemaining = dr;
+    }
+    if (r0.includes('LAST DATE')) {
+      const nr = rows[i+1]||[];
+      if (nr[0]) result.lastDate = nr[0].toString().trim();
+    }
+
+    // Month rows (Checking col 0 and col 3 for month names)
+    MONTHS.forEach((m, idx) => {
+      if (r0 === m.toUpperCase()) {
+        const amt = cleanNum(row[1]);
+        if (amt > 0) result.monthAmounts[idx] = amt;
+      }
+      if (r3 === m.toUpperCase()) {
+        const amt = cleanNum(row[4]);
+        if (amt > 0) result.monthAmounts[idx] = amt;
+      }
+    });
+  }
+
+  return result;
+}
+
+async function loadData() {
+  document.getElementById('loadingOverlay').style.display = 'flex';
+  document.getElementById('refreshBtn').classList.add('spinning');
+  document.getElementById('dataStatus').textContent = 'FETCHING LIVE DATA...';
+  document.getElementById('errorMsg').style.display = 'none';
+
+  try {
+    const resp = await fetch(CSV_URL + '&cachebust=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const text = await resp.text();
+
+    Papa.parse(text, {
+      skipEmptyLines: true,
+      complete(results) {
+        const data = parseCSV(results.data);
+        // Fill any gaps with static fallback if live data is empty
+        if (!data.contractValue) data.contractValue = STATIC.contractValue;
+        if (!data.workDone)      data.workDone      = STATIC.workDone;
+        if (!data.daysRemaining) data.daysRemaining = STATIC.daysRemaining;
+        if (data.lastDate === '—') data.lastDate    = STATIC.lastDate;
+        if (data.contractorName === '—') data.contractorName = STATIC.contractorName;
+        if (data.monthAmounts.every(v=>v===0)) data.monthAmounts = STATIC.monthAmounts;
+        
+        document.getElementById('dataStatus').textContent = 'LIVE · GOOGLE SHEETS';
+        renderDashboard(data);
+      },
+      error(e) { throw new Error(e.message); }
+    });
+
+  } catch(e) {
+    document.getElementById('errorMsg').style.display = 'block';
+    document.getElementById('errorMsg').textContent = '⚠ Could not fetch live data (' + e.message + '). Showing last known values.';
+    document.getElementById('dataStatus').textContent = 'OFFLINE — SHOWING STATIC DATA';
+    renderDashboard(STATIC);
+  }
+}
+
+loadData();
+</script>
+</body>
+</html>
